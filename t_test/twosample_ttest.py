@@ -63,6 +63,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
 
+import matplotlib.tri as tri
+from matplotlib.colors import Normalize
+
 DEFAULT_a = 0.05  # Default significance level.
 DEFAULT_d = 0  # Default discrepancy between two means.
 DEFAULT_n = 30  # Default sample size, if not specified.
@@ -101,6 +104,24 @@ def load_data(filename):
     # for line in lines[1:]:
     #     token = line.split()
     #     data[token[0]] = [float(token[1]), float(token[2])]
+    ##################################### PROCESSING
+    for line in lines:
+        tokens = line.split()
+        if len(tokens) == 6:
+            #
+            try:
+                [e, x, y, z, res, rel] = [float(v) for v in line.split()]
+            except ValueError:
+                e = line.split()[0]
+                [x, y, z, res, rel] = [float(v) for v in line.split()[1:]]
+            # data.setdefault(e, {})
+            # data[e][(x,y,z)] = (res, rel)
+            # if e == 'Total':#5.000E-07:
+            if e == 5.000E-07 and z == 22.5:
+                if res != 0.00000E+00 and rel != 0.00000E+00:
+                    data[(x,y,z)] = [res, rel*res, 1000]
+            #
+
 
     return data
 
@@ -130,6 +151,8 @@ def process_data(rdata, default_n=DEFAULT_n):
     # for key, val in rdata.items():
     #     val.append(default_n)
     #     pdata[key] = val
+    ##################################### PROCESSING
+    pdata = rdata
 
     return pdata
 
@@ -163,6 +186,14 @@ def process_2dplot_input(stat):
     # tt = "p-value Heatmap"
     # xl = "X [cm]"
     # yl = "Y [cm]"
+    ##################################### PROCESSING
+    x = np.array([key[0] for key in stat])
+    y = np.array([key[1] for key in stat])
+    v = np.array([val[2] for val in stat.values()])
+    tt = 'F'
+    xl = "X"
+    yl = "Y"
+
     return (x, y, v, tt, xl, yl)
 
 
@@ -233,7 +264,7 @@ def plot_p_hist(stat, alpha, plot_fname):
     plt.savefig(plot_fname)
 
 
-def plot_p_2d(x, y, v, tt, xl, yl, alpha, plot_fname, reject_only=True):
+def plot_p_2d(x, y, v, tt, xl, yl, alpha, plot_fname, reject_only=False):
     """Plot calculated p-values in 2D heatmap.
 
     This function generates a 2D heatmap of p-values.
@@ -264,6 +295,11 @@ def plot_p_2d(x, y, v, tt, xl, yl, alpha, plot_fname, reject_only=True):
     y = np.array(y)
     v = np.array(v)
 
+    vmin = np.min(v)
+    vmax = np.max(v)
+    print(vmin, vmax)
+    norm = Normalize(vmin=vmin, vmax=vmax, clip=True)
+
     if reject_only:
         xp = x[v>alpha]
         yp = y[v>alpha]
@@ -273,19 +309,31 @@ def plot_p_2d(x, y, v, tt, xl, yl, alpha, plot_fname, reject_only=True):
         vr = v[v<=alpha]
         ax.scatter(xp, yp, c='k', marker='1', label='Pass')
         ax.legend(loc=(1.0, 1.0))
-        im = ax.scatter(xr, yr, c=vr, cmap='viridis', marker="s",
-                        vmin=0, vmax=alpha)
-        cticks = np.linspace(0, alpha, 6)
+
+        triang = tri.Triangulation(xr, yr)
+        surf = ax.tripcolor(triang, vr, norm=norm, cmap='viridis', shading='flat')
+        cbar = fig.colorbar(surf)
+
+        # im = ax.scatter(xr, yr, c=vr, cmap='viridis', marker="s",
+        #                 vmin=0, vmax=alpha)
+        # cticks = np.linspace(0, alpha, 6)
     else:
         divnorm = colors.TwoSlopeNorm(vcenter=alpha)
-        im = ax.scatter(x, y, c=v, cmap='seismic_r', norm=divnorm, marker='s',
-                        edgecolors='k', linewidth=0.2)
-        cticks = sorted(np.append(np.linspace(0, 1, 11), alpha))
+
+        triang = tri.Triangulation(x, y)
+        surf = ax.tripcolor(triang, v, norm=divnorm, cmap='seismic_r', shading='flat')
+        cbar = fig.colorbar(surf)
+
+
+        # im = ax.scatter(x, y, c=v, cmap='seismic_r', norm=divnorm, marker='s',
+        #                 edgecolors='k', linewidth=0.2)
+        # cticks = sorted(np.append(np.linspace(0, 1, 11), alpha))
+        # fig.colorbar(im, ax=ax, ticks=cticks)
 
     ax.set_title(tt)
     ax.set_xlabel(xl)
     ax.set_ylabel(yl)
-    fig.colorbar(im, ax=ax, ticks=cticks)
+    # fig.colorbar(im, ax=ax, ticks=cticks)
 
     plt.savefig(plot_fname)
 
